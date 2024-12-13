@@ -7,7 +7,7 @@ import config
 import login
 import setting
 import tools
-from error import CookieError
+from error import StokenError
 from loghelper import log
 from request import http
 
@@ -78,8 +78,8 @@ class Mihoyobbs:
         data = req.json()
         if "err" in data["message"] or data["retcode"] == -100:
             log.error("获取任务列表失败，你的cookie可能已过期，请重新设置cookie。")
-            config.clear_cookies()
-            raise CookieError('Cookie expires')
+            config.clear_stoken()
+            raise StokenError('Stoken expires')
         self.today_get_coins = data["data"]["can_get_points"]
         self.today_have_get_coins = data["data"]["already_received_points"]
         self.have_coins = data["data"]["total_points"]
@@ -137,8 +137,10 @@ class Mihoyobbs:
         for forum in self.bbs_list:
             challenge = None
             for retry_count in range(2):
-                header["DS"] = tools.get_ds2("", json.dumps({"gids": forum["id"]}))
-                req = http.post(url=setting.bbs_sign_url, json={"gids": forum["id"]}, headers=header)
+                post_data = json.dumps({"gids": forum["id"]})
+                post_data.replace(' ', '')
+                header["DS"] = tools.get_ds2("", post_data)
+                req = http.post(url=setting.bbs_sign_url, data=post_data, headers=header)
                 log.debug(req.text)
                 data = req.json()
                 if data["retcode"] == 1034:
@@ -150,10 +152,12 @@ class Mihoyobbs:
                     log.info(str(forum["name"] + data["message"]))
                     wait()
                     break
-                else:
+                elif data["retcode"] == -100:
                     log.error("签到失败，你的cookie可能已过期，请重新设置cookie。")
-                    config.clear_cookies()
-                    raise CookieError('Cookie expires')
+                    config.clear_stoken()
+                    raise StokenError('Stoken expires')
+                else:
+                    log.error(f'未知错误: {req.text}')
             if challenge is not None:
                 header.pop("x-rpc-challenge")
 
